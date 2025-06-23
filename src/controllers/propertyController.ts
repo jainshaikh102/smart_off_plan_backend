@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { PropertyService } from "../services/propertyService";
-import { GetPropertiesQuery } from "../types";
+import { GetPropertiesQuery, PropertyDetailsResponse } from "../types";
 
 export class PropertyController {
   private propertyService: PropertyService;
@@ -71,7 +71,7 @@ export class PropertyController {
     }
   };
 
-  // Get property by ID
+  // Get property by ID (NEW SCHEMA)
   getPropertyById = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = parseInt(req.params.id, 10);
@@ -84,7 +84,7 @@ export class PropertyController {
         });
       }
 
-      console.log(`📊 Fetching property with ID: ${id}`);
+      console.log(`🏠 [NEW SCHEMA] Fetching property with ID: ${id}`);
 
       const result = await this.propertyService.getPropertyById(id);
 
@@ -92,11 +92,61 @@ export class PropertyController {
         return res.status(404).json(result);
       }
 
-      console.log(`✅ Successfully fetched property ${id}`);
+      console.log(`✅ Successfully fetched property ${id} with new schema`);
 
       res.status(200).json(result);
     } catch (error) {
-      console.error("❌ Error in getPropertyById:", error);
+      console.error("❌ Error in getPropertyById (NEW SCHEMA):", error);
+      next(error);
+    }
+  };
+
+  // Get properties pending review (NEW SCHEMA)
+  getPropertiesPendingReview = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      console.log(`📋 Getting properties pending review`);
+
+      // This would use the new static method from the model
+      const PropertyModel = require("../models/Property").default;
+      const pendingProperties = await PropertyModel.findPendingReview();
+
+      res.status(200).json({
+        success: true,
+        data: pendingProperties,
+        message: `Found ${pendingProperties.length} properties pending review`,
+      });
+    } catch (error) {
+      console.error("❌ Error in getPropertiesPendingReview:", error);
+      next(error);
+    }
+  };
+
+  // Get featured properties with new schema
+  getFeaturedPropertiesV2 = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      console.log(
+        `🌟 [NEW SCHEMA] Getting featured properties (limit: ${limit})`
+      );
+
+      const PropertyModel = require("../models/Property").default;
+      const featuredProperties = await PropertyModel.findFeatured(limit);
+
+      res.status(200).json({
+        success: true,
+        data: featuredProperties,
+        message: `Found ${featuredProperties.length} featured properties`,
+      });
+    } catch (error) {
+      console.error("❌ Error in getFeaturedPropertiesV2:", error);
       next(error);
     }
   };

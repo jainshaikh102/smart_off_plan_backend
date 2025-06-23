@@ -44,7 +44,7 @@ export class PropertyService {
   }
 
   /**
-   * Transform cached property to our internal format
+   * Transform cached property to our internal format (NEW SCHEMA)
    */
   private transformCachedProperty(cachedProperty: IProperty): Property {
     return {
@@ -62,7 +62,51 @@ export class PropertyService {
       status: cachedProperty.status,
       completion_datetime: cachedProperty.completion_datetime,
       coordinates: cachedProperty.coordinates,
-      normalized_type: cachedProperty.normalized_type,
+      // Remove normalized_type as it's not in new schema
+    };
+  }
+
+  /**
+   * Transform database property to detailed response format (NEW SCHEMA)
+   */
+  private transformDatabasePropertyToDetail(dbProperty: IProperty): any {
+    return {
+      // Core property information
+      id: dbProperty.externalId,
+      externalId: dbProperty.externalId,
+      name: dbProperty.name,
+      area: dbProperty.area,
+      area_unit: dbProperty.area_unit,
+      cover_image_url: dbProperty.cover_image_url,
+      developer: dbProperty.developer,
+      is_partner_project: dbProperty.is_partner_project,
+      min_price: dbProperty.min_price,
+      max_price: dbProperty.max_price,
+      price_currency: dbProperty.price_currency,
+      sale_status: dbProperty.sale_status,
+      completion_datetime: dbProperty.completion_datetime,
+      coordinates: dbProperty.coordinates,
+      description: dbProperty.description,
+
+      // Property status and control fields
+      status: dbProperty.status,
+      featured: dbProperty.featured,
+      pendingReview: dbProperty.pendingReview,
+      featureReason: dbProperty.featureReason,
+      reelly_status: dbProperty.reelly_status,
+      lastFeaturedAt: dbProperty.lastFeaturedAt,
+
+      // Complete API data
+      completePropertyData: dbProperty.completePropertyData,
+
+      // Cache metadata
+      lastFetchedAt: dbProperty.lastFetchedAt,
+      cacheExpiresAt: dbProperty.cacheExpiresAt,
+      source: dbProperty.source,
+
+      // Timestamps
+      createdAt: dbProperty.createdAt,
+      updatedAt: dbProperty.updatedAt,
     };
   }
 
@@ -392,184 +436,240 @@ export class PropertyService {
     }
   }
 
-  // Get property by ID with smart caching approach
+  /**
+   * Get property by ID with NEW SCHEMA - Complete rebuild from scratch
+   */
   async getPropertyById(id: number): Promise<ApiResponse<any | null>> {
     try {
-      console.log(`🔍 Getting property by ID: ${id}`);
+      console.log(`🔍 [NEW SCHEMA] Getting property by ID: ${id}`);
 
-      // Step 1: Check if property exists in our MongoDB database
+      // Step 1: Check if property exists in our MongoDB database with new schema
       const existingProperty = await PropertyModel.findByExternalId(id);
 
       if (existingProperty) {
-        console.log(`✅ Found property ${id} in database`);
-        const property = this.transformDatabaseProperty(existingProperty);
-        return {
-          success: true,
-          data: property,
-          message: `Successfully fetched property ${id} from database`,
-        };
-      }
+        // Check if cache is still valid
+        const isExpired = existingProperty.isExpired();
 
-      console.log(
-        `📡 Property ${id} not in database, fetching from third-party API...`
-      );
-
-      // Step 2: Fetch from third-party API if not in database
-      try {
-        const apiProperty = await this.fetchPropertyFromThirdPartyAPI(id);
-
-        if (apiProperty) {
-          console.log(`✅ Fetched property ${id} from third-party API`);
-
-          // Step 3: Save to MongoDB database for future requests
-          await this.savePropertyToDatabase(apiProperty);
-
-          // Transform and return the property
-          const property = this.transformThirdPartyProperty(apiProperty);
+        if (!isExpired && existingProperty.reelly_status) {
+          console.log(`✅ Found fresh property ${id} in database`);
+          const property =
+            this.transformDatabasePropertyToDetail(existingProperty);
           return {
             success: true,
             data: property,
-            message: `Successfully fetched property ${id} from third-party API`,
+            message: `Fetched property ${id} from local database`,
           };
-        } else {
-          console.log(`📭 Property ${id} not found in third-party API`);
         }
-      } catch (apiError) {
-        console.error(
-          `❌ Third-party API error for property ${id}, falling back to mock data:`,
-          apiError
+
+        console.log(
+          `♻️ Property ${id} cache expired or Reelly status changed. Refreshing...`
         );
       }
 
-      // Step 4: Fallback to mock data if API fails or property not found
-      const mockProperties = this.getMockProperties();
-      const mockProperty = mockProperties.find((p) => p.id === id);
+      // Step 2: Fetch from Reelly API
+      const apiProperty = await this.fetchPropertyFromReallyAPI(id);
 
-      if (!mockProperty) {
+      if (apiProperty) {
+        console.log(`✅ Fetched property ${id} from Reelly API`);
+
+        // Step 3: Save/update in database with new schema
+        const savedProperty = await this.saveOrUpdatePropertyWithNewSchema(
+          id,
+          apiProperty
+        );
+
+        const property = this.transformDatabasePropertyToDetail(savedProperty);
+
         return {
-          success: false,
-          data: null,
-          message: `Property with ID ${id} not found`,
+          success: true,
+          data: property,
+          message: `Fetched property ${id} from Reelly API and updated database`,
         };
       }
 
+      // Step 4: If property exists in DB but not in API, mark as inactive
+      if (existingProperty) {
+        console.log(
+          `⚠️ Property ${id} not found in Reelly API, marking as inactive`
+        );
+        existingProperty.reelly_status = false;
+        existingProperty.status = "disabled";
+        await existingProperty.save();
+
+        const property =
+          this.transformDatabasePropertyToDetail(existingProperty);
+        return {
+          success: true,
+          data: property,
+          message: `Property ${id} not found in Reelly API (marked as inactive)`,
+        };
+      }
+
+      console.log(`📭 Property ${id} not found anywhere`);
       return {
-        success: true,
-        data: mockProperty,
-        message: `Successfully fetched property ${id} from fallback data`,
+        success: false,
+        data: null,
+        message: `Property with ID ${id} not found`,
       };
     } catch (error) {
-      console.error("Error fetching property by ID:", error);
-      throw new Error("Failed to fetch property");
+      console.error("❌ Error in getPropertyById (NEW SCHEMA):", error);
+      return {
+        success: false,
+        data: null,
+        message: "Failed to fetch property",
+      };
     }
   }
 
-  // Fetch property from third-party API
-  private async fetchPropertyFromThirdPartyAPI(
-    id: number
-  ): Promise<any | null> {
+  /**
+   * Fetch property from Reelly API (NEW SCHEMA)
+   */
+  private async fetchPropertyFromReallyAPI(id: number): Promise<any | null> {
     try {
-      console.log(`🔧 Property Detail API Config: {
-  apiBaseUrl: '${this.baseUrl}',
-  hasApiKey: ${!!this.apiKey},
-  apiKeyLength: ${this.apiKey?.length || 0},
-  propertyId: '${id}'
-}`);
+      console.log(`📡 [NEW SCHEMA] Calling Reelly API for property: ${id}`);
 
       if (!this.baseUrl || !this.apiKey) {
-        throw new Error("Third-party API configuration missing");
+        throw new Error("Reelly API configuration missing");
       }
 
       const url = `${this.baseUrl}/v1/properties/${id}`;
-      console.log(`📡 Calling external API for property detail: ${url}`);
+      console.log(`🔗 API URL: ${url}`);
 
-      // Try different header configurations
-      const headerOptions = [
-        {
-          Authorization: `Bearer ${this.apiKey}`,
+      const response = await axios.get(url, {
+        headers: {
+          "X-API-KEY": this.apiKey,
           "Content-Type": "application/json",
-          Accept: "application/json",
         },
-        {
-          "X-API-Key": this.apiKey,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-      ];
+        timeout: 30000,
+      });
 
-      for (let i = 0; i < headerOptions.length; i++) {
-        try {
-          console.log(
-            `📤 Trying header option ${i + 1}: ${JSON.stringify(
-              headerOptions[i],
-              null,
-              2
-            )}`
-          );
-
-          const response = await axios.get(url, {
-            headers: headerOptions[i],
-            timeout: 30000, // 30 seconds timeout
-          });
-
-          console.log(
-            `📥 Response status for option ${i + 1}: ${response.status}`
-          );
-
-          if (response.status === 200) {
-            console.log(`✅ Success with header option ${i + 1}`);
-            console.log(`📥 External API response status: ${response.status}`);
-            console.log(`✅ External API response received`);
-            console.log(`📊 Response type: ${typeof response.data}`);
-
-            if (response.data && typeof response.data === "object") {
-              console.log(
-                `📊 Response keys: ${JSON.stringify(
-                  Object.keys(response.data),
-                  null,
-                  2
-                )}`
-              );
-              console.log(`📊 Property detail structure: {
-  id: ${response.data.id},
-  name: '${response.data.name}',
-  area: '${response.data.area}',
-  developer: '${response.data.developer}',
-  hasImages: ${!!response.data.cover_image_url},
-  priceInfo: { min_price: ${response.data.min_price}, max_price: ${
-                response.data.max_price
-              }, currency: '${response.data.price_currency}' }
-}`);
-            }
-
-            return response.data;
-          }
-        } catch (error: any) {
-          console.log(
-            `📥 Response status for option ${i + 1}: ${
-              error.response?.status || "unknown"
-            }`
-          );
-          console.log(
-            `❌ Failed with option ${i + 1}: { error: '${
-              error.response?.data?.message || error.message
-            }' }`
-          );
-
-          if (i === headerOptions.length - 1) {
-            console.log(`❌ All header options failed`);
-            throw error;
-          }
-        }
+      if (response.data && response.data.id) {
+        console.log(`✅ Successfully fetched property ${id} from Reelly API`);
+        return response.data;
       }
 
+      console.log(`📭 Property ${id} not found in Reelly API`);
       return null;
     } catch (error: any) {
+      if (error.response?.status === 404) {
+        console.log(`📭 Property ${id} not found in Reelly API (404)`);
+        return null;
+      }
       console.error(
-        `❌ Error fetching property ${id} from third-party API:`,
+        `❌ Error fetching property ${id} from Reelly API:`,
         error.message
       );
       throw error;
+    }
+  }
+
+  /**
+   * Save or update property with NEW SCHEMA
+   */
+  private async saveOrUpdatePropertyWithNewSchema(
+    externalId: number,
+    apiData: any
+  ): Promise<IProperty> {
+    try {
+      console.log(
+        `💾 [NEW SCHEMA] Saving/updating property ${externalId} in database`
+      );
+
+      // Prepare property data with new schema
+      const propertyData = {
+        externalId: externalId,
+        name: apiData.name || "Unknown Property",
+        area: apiData.area || "Unknown Area",
+        area_unit: apiData.area_unit,
+        cover_image_url: apiData.cover_image_url,
+        developer: apiData.developer || "Unknown Developer",
+        is_partner_project: apiData.is_partner_project || false,
+        min_price: apiData.min_price,
+        max_price: apiData.max_price,
+        price_currency: apiData.price_currency || "AED",
+        sale_status: apiData.sale_status || "Available",
+        completion_datetime: apiData.completion_datetime,
+        coordinates: apiData.coordinates,
+        description: apiData.description,
+
+        // Complete API data storage
+        completePropertyData: apiData,
+
+        // Property status and control fields (NEW SCHEMA)
+        status: "active", // Default to active for new properties
+        featured: false, // Will be set by rules later
+        pendingReview: false, // Will be set by rules if needed
+        featureReason: [], // Will be populated by rules
+        reelly_status: true, // Property exists in Reelly API
+        lastFeaturedAt: null,
+
+        // Cache metadata
+        lastFetchedAt: new Date(),
+        cacheExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        source: "realty_api",
+      };
+
+      // Apply feature rules
+      this.applyFeatureRules(propertyData);
+
+      // Save or update in database
+      const savedProperty = await PropertyModel.findOneAndUpdate(
+        { externalId: externalId },
+        { $set: propertyData },
+        { upsert: true, new: true }
+      );
+
+      console.log(`✅ Property ${externalId} saved/updated successfully`);
+      return savedProperty;
+    } catch (error) {
+      console.error(`❌ Error saving property ${externalId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Apply feature rules to property data (NEW SCHEMA)
+   */
+  private applyFeatureRules(propertyData: any): void {
+    const reasons: string[] = [];
+
+    // Rule 1: High-value properties (min_price >= 1,000,000 AED)
+    if (propertyData.min_price && propertyData.min_price >= 1000000) {
+      reasons.push("min_price_aed >= 1000000");
+    }
+
+    // Rule 2: Partner projects
+    if (propertyData.is_partner_project) {
+      reasons.push("is_partner_project");
+    }
+
+    // Rule 3: Properties with many facilities (if available in completePropertyData)
+    if (propertyData.completePropertyData?.facilities?.length >= 10) {
+      reasons.push("facilities.length >= 10");
+    }
+
+    // Rule 4: Premium areas
+    const premiumAreas = [
+      "Downtown Dubai",
+      "Dubai Marina",
+      "Palm Jumeirah",
+      "DIFC",
+    ];
+    if (premiumAreas.some((area) => propertyData.area?.includes(area))) {
+      reasons.push("premium_area");
+    }
+
+    // If any rules matched, mark as featured and pending review
+    if (reasons.length > 0) {
+      propertyData.featured = true;
+      propertyData.pendingReview = true;
+      propertyData.featureReason = reasons;
+      propertyData.lastFeaturedAt = new Date();
+      console.log(
+        `🌟 Property ${
+          propertyData.externalId
+        } marked as featured: ${reasons.join(", ")}`
+      );
     }
   }
 

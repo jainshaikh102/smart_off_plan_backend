@@ -50,11 +50,60 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
       }, dataLength: ${response.data?.length || 0} }`
     );
 
-    // Return the response from third-party API
+    // Extract pagination info from query params
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 12;
+
+    console.log(`📊 Third-party API response structure:`, {
+      hasData: !!response.data,
+      dataType: Array.isArray(response.data) ? "array" : typeof response.data,
+      dataKeys: response.data ? Object.keys(response.data) : [],
+      hasPagination: !!response.data?.pagination,
+    });
+
+    // Check if third-party API returns pagination info
+    let paginationData;
+    let itemsData;
+    let total;
+
+    if (response.data?.pagination) {
+      // Third-party API provides pagination - map to our expected format
+      const thirdPartyPagination = response.data.pagination;
+      paginationData = {
+        page: thirdPartyPagination.page,
+        limit: thirdPartyPagination.per_page || limit,
+        total: thirdPartyPagination.total,
+        totalPages: thirdPartyPagination.pages,
+        has_next: thirdPartyPagination.has_next,
+        has_prev: thirdPartyPagination.has_prev,
+      };
+      itemsData = response.data.items || response.data.data || response.data;
+      total = paginationData.total;
+      console.log(`✅ Using third-party pagination:`, thirdPartyPagination);
+      console.log(`📊 Mapped pagination:`, paginationData);
+    } else {
+      // Calculate our own pagination
+      itemsData = response.data;
+      total = Array.isArray(itemsData) ? itemsData.length : 0;
+      paginationData = {
+        page: page,
+        limit: limit,
+        total: total,
+        totalPages: Math.ceil(total / limit),
+        has_next: page < Math.ceil(total / limit),
+        has_prev: page > 1,
+      };
+      console.log(`📊 Created pagination:`, paginationData);
+    }
+
+    // Return the response with proper structure
     res.json({
       success: true,
-      data: response.data,
-      total: response.data?.length || 0,
+      data: {
+        items: itemsData,
+        pagination: paginationData,
+      },
+      total: total,
       source: "third-party-api",
     });
   } catch (error) {

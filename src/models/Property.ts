@@ -1,8 +1,8 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-// Interface for Property document
+// Interface for Property document with new improved schema
 export interface IProperty extends Document {
-  // Basic property information
+  // Core property information
   externalId: number; // ID from Realty API
   name: string;
   area: string;
@@ -14,30 +14,22 @@ export interface IProperty extends Document {
   max_price: number | null;
   price_currency: string;
   sale_status: string;
-  status: string;
   completion_datetime: string | null;
   coordinates?: string;
-  normalized_type?: string;
-
-  // Additional fields from Realty API
   description?: string;
-  address?: string;
-  bedrooms?: number;
-  bathrooms?: number;
-  size_sqft?: number;
-  size_sqm?: number;
-
-  // SEO fields
-  seoTitle?: string;
-  seoDescription?: string;
 
   // Complete API data storage
   completePropertyData?: any; // Store the complete API response from /v1/properties/{id}
 
-  // Featured property flag
+  // Property status and control fields
+  status: "active" | "disabled" | "draft"; // Manual control over property visibility
   featured: boolean; // Mark property as featured (default: false)
+  pendingReview: boolean; // Flags listings awaiting admin review
+  featureReason: string[]; // Reasons why property was marked as featured
+  reelly_status: boolean; // Tracks whether property is still active in Reelly's API
+  lastFeaturedAt: Date | null; // When property was last marked as featured
 
-  // Cache metadata
+  // Cache and sync metadata
   lastFetchedAt: Date;
   cacheExpiresAt: Date;
   source: "realty_api" | "manual";
@@ -49,9 +41,11 @@ export interface IProperty extends Document {
   // Instance methods
   isExpired(): boolean;
   refreshCache(hours?: number): void;
+  markAsFeatured(reason: string): void;
+  markForReview(): void;
 }
 
-// Property Schema
+// Property Schema with new improved structure
 const PropertySchema: Schema = new Schema(
   {
     externalId: {
@@ -112,12 +106,6 @@ const PropertySchema: Schema = new Schema(
       trim: true,
       index: true,
     },
-    status: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true,
-    },
     completion_datetime: {
       type: String,
       default: null,
@@ -126,52 +114,49 @@ const PropertySchema: Schema = new Schema(
       type: String,
       trim: true,
     },
-    normalized_type: {
-      type: String,
-      trim: true,
-      index: true,
-    },
     description: {
       type: String,
       trim: true,
     },
-    address: {
-      type: String,
-      trim: true,
-    },
-    bedrooms: {
-      type: Number,
-      min: 0,
-    },
-    bathrooms: {
-      type: Number,
-      min: 0,
-    },
-    size_sqft: {
-      type: Number,
-      min: 0,
-    },
-    size_sqm: {
-      type: Number,
-      min: 0,
-    },
-    seoTitle: {
-      type: String,
-      trim: true,
-    },
-    seoDescription: {
-      type: String,
-      trim: true,
-    },
+    // Complete API data storage
     completePropertyData: {
       type: Schema.Types.Mixed, // Store complete API response as flexible object
       default: null,
     },
+
+    // Property status and control fields
+    status: {
+      type: String,
+      enum: ["active", "disabled", "draft"],
+      default: "active",
+      required: true,
+      index: true,
+    },
     featured: {
       type: Boolean,
       default: false,
-      index: true, // Index for efficient querying of featured properties
+      index: false, // Index for efficient querying of featured properties
     },
+    pendingReview: {
+      type: Boolean,
+      default: false,
+      index: true, // Index for admin review queries
+    },
+    featureReason: {
+      type: [String], // Array of reasons why property was marked as featured
+      default: [],
+    },
+    reelly_status: {
+      type: Boolean,
+      default: true, // Tracks whether property is still active in Reelly's API
+      index: true,
+    },
+    lastFeaturedAt: {
+      type: Date,
+      default: null, // When property was last marked as featured
+    },
+
+    // Cache and sync metadata
     lastFetchedAt: {
       type: Date,
       required: true,
@@ -200,10 +185,14 @@ const PropertySchema: Schema = new Schema(
 PropertySchema.index({ area: 1, developer: 1 });
 PropertySchema.index({ min_price: 1, max_price: 1 });
 PropertySchema.index({ status: 1, sale_status: 1 });
+PropertySchema.index({ featured: 1, status: 1 }); // For featured property queries
+PropertySchema.index({ pendingReview: 1, status: 1 }); // For admin review queries
+PropertySchema.index({ reelly_status: 1 }); // For tracking Reelly API status
 PropertySchema.index({ cacheExpiresAt: 1 });
 PropertySchema.index({ lastFetchedAt: -1 });
+PropertySchema.index({ lastFeaturedAt: -1 }); // For featured property rotation
 
-// Methods
+// Instance Methods
 PropertySchema.methods.isExpired = function (): boolean {
   return new Date() > this.cacheExpiresAt;
 };
@@ -213,12 +202,28 @@ PropertySchema.methods.refreshCache = function (hours: number = 24): void {
   this.cacheExpiresAt = new Date(Date.now() + hours * 60 * 60 * 1000);
 };
 
+PropertySchema.methods.markAsFeatured = function (reason: string): void {
+  this.featured = true;
+  this.lastFeaturedAt = new Date();
+  if (!this.featureReason.includes(reason)) {
+    this.featureReason.push(reason);
+  }
+};
+
+PropertySchema.methods.markForReview = function (): void {
+  this.pendingReview = true;
+};
+
 // Define interface for static methods
 interface IPropertyModel extends mongoose.Model<IProperty> {
   findByExternalId(externalId: number): Promise<IProperty | null>;
   findExpired(): Promise<IProperty[]>;
   findByArea(area: string): Promise<IProperty[]>;
   findByDeveloper(developer: string): Promise<IProperty[]>;
+  findFeatured(limit?: number): Promise<IProperty[]>;
+  findPendingReview(): Promise<IProperty[]>;
+  findActiveProperties(): Promise<IProperty[]>;
+  findByReallyStatus(status: boolean): Promise<IProperty[]>;
 }
 
 // Static methods
@@ -231,11 +236,31 @@ PropertySchema.statics.findExpired = function () {
 };
 
 PropertySchema.statics.findByArea = function (area: string) {
-  return this.find({ area: new RegExp(area, "i") });
+  return this.find({ area: new RegExp(area, "i"), status: "active" });
 };
 
 PropertySchema.statics.findByDeveloper = function (developer: string) {
-  return this.find({ developer: new RegExp(developer, "i") });
+  return this.find({ developer: new RegExp(developer, "i"), status: "active" });
+};
+
+PropertySchema.statics.findFeatured = function (limit: number = 10) {
+  return this.find({ featured: true, status: "active" })
+    .sort({ lastFeaturedAt: -1 })
+    .limit(limit);
+};
+
+PropertySchema.statics.findPendingReview = function () {
+  return this.find({ pendingReview: true, status: "active" }).sort({
+    updatedAt: -1,
+  });
+};
+
+PropertySchema.statics.findActiveProperties = function () {
+  return this.find({ status: "active", reelly_status: true });
+};
+
+PropertySchema.statics.findByReallyStatus = function (status: boolean) {
+  return this.find({ reelly_status: status });
 };
 
 export default mongoose.model<IProperty, IPropertyModel>(
