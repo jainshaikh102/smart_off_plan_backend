@@ -32,7 +32,7 @@ export class PropertyController {
     }
   };
 
-  // Get all properties
+  // Get all properties from database (NEW: Database-first approach)
   getAllProperties = async (
     req: Request,
     res: Response,
@@ -58,7 +58,54 @@ export class PropertyController {
           : undefined,
       };
 
-      console.log("📊 Fetching properties with query:", query);
+      console.log(
+        "🗄️ [DATABASE-FIRST] Fetching properties from database with query:",
+        query
+      );
+
+      // Use the new database-first method
+      const result = await this.propertyService.getAllPropertiesFromDatabase(
+        query
+      );
+
+      console.log(
+        `✅ Successfully fetched ${result.data.length} properties from database`
+      );
+
+      res.status(200).json(result);
+    } catch (error) {
+      console.error("❌ Error in getAllProperties (database-first):", error);
+      next(error);
+    }
+  };
+
+  // Get all properties from API (LEGACY: API-first approach)
+  getAllPropertiesLegacy = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const query: GetPropertiesQuery = {
+        page: req.query.page
+          ? parseInt(req.query.page as string, 10)
+          : undefined,
+        limit: req.query.limit
+          ? parseInt(req.query.limit as string, 10)
+          : undefined,
+        sort: req.query.sort as GetPropertiesQuery["sort"],
+        area: req.query.area as string,
+        developer: req.query.developer as string,
+        status: req.query.status as string,
+        min_price: req.query.min_price
+          ? parseInt(req.query.min_price as string, 10)
+          : undefined,
+        max_price: req.query.max_price
+          ? parseInt(req.query.max_price as string, 10)
+          : undefined,
+      };
+
+      console.log("📊 [LEGACY] Fetching properties with query:", query);
 
       const result = await this.propertyService.getAllProperties(query);
 
@@ -66,7 +113,7 @@ export class PropertyController {
 
       res.status(200).json(result);
     } catch (error) {
-      console.error("❌ Error in getAllProperties:", error);
+      console.error("❌ Error in getAllPropertiesLegacy:", error);
       next(error);
     }
   };

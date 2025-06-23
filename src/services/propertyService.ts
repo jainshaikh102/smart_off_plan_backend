@@ -110,6 +110,29 @@ export class PropertyService {
     };
   }
 
+  /**
+   * Transform database property to list item format (for property listings)
+   */
+  private transformDatabasePropertyToListItem(dbProperty: any): Property {
+    return {
+      id: dbProperty.externalId,
+      name: dbProperty.name,
+      area: dbProperty.area,
+      area_unit: dbProperty.area_unit,
+      cover_image_url: dbProperty.cover_image_url,
+      developer: dbProperty.developer,
+      is_partner_project: dbProperty.is_partner_project,
+      min_price: dbProperty.min_price,
+      max_price: dbProperty.max_price,
+      price_currency: dbProperty.price_currency,
+      sale_status: dbProperty.sale_status,
+      status: dbProperty.status,
+      completion_datetime: dbProperty.completion_datetime,
+      coordinates: dbProperty.coordinates,
+      normalized_type: dbProperty.normalized_type || "Property",
+    };
+  }
+
   // Mock data that matches your frontend's expected structure
   private getMockProperties(): Property[] {
     return [
@@ -252,7 +275,126 @@ export class PropertyService {
     }
   }
 
-  // Get all properties with optional filtering and sorting
+  // Get all properties from database (NEW: Database-first approach)
+  async getAllPropertiesFromDatabase(
+    query: GetPropertiesQuery = {}
+  ): Promise<ApiResponse<Property[]>> {
+    try {
+      console.log(
+        "🗄️ [DATABASE-FIRST] Getting properties from database with query:",
+        query
+      );
+
+      // Build MongoDB query
+      const mongoQuery: any = {
+        status: "active", // Only get active properties
+        reelly_status: true, // Only get properties that exist in Reelly API
+      };
+
+      // Add filters
+      if (query.area) {
+        mongoQuery.area = { $regex: query.area, $options: "i" };
+      }
+
+      if (query.developer) {
+        mongoQuery.developer = { $regex: query.developer, $options: "i" };
+      }
+
+      if (query.status) {
+        // Map frontend status to database fields
+        if (query.status.toLowerCase() === "available") {
+          mongoQuery.sale_status = { $regex: "available", $options: "i" };
+        } else {
+          mongoQuery.$or = [
+            { sale_status: { $regex: query.status, $options: "i" } },
+            { status: { $regex: query.status, $options: "i" } },
+          ];
+        }
+      }
+
+      if (query.min_price) {
+        mongoQuery.min_price = { $gte: query.min_price };
+      }
+
+      if (query.max_price) {
+        mongoQuery.max_price = { $lte: query.max_price };
+      }
+
+      console.log("🔍 MongoDB query:", mongoQuery);
+
+      // Build sort criteria
+      let sortCriteria: any = {};
+      switch (query.sort) {
+        case "completion_asc":
+          sortCriteria = { completion_datetime: 1 };
+          break;
+        case "completion_desc":
+          sortCriteria = { completion_datetime: -1 };
+          break;
+        case "price_asc":
+          sortCriteria = { min_price: 1 };
+          break;
+        case "price_desc":
+          sortCriteria = { max_price: -1 };
+          break;
+        case "name_asc":
+          sortCriteria = { name: 1 };
+          break;
+        case "name_desc":
+          sortCriteria = { name: -1 };
+          break;
+        case "featured":
+          sortCriteria = { featured: -1, lastFeaturedAt: -1, createdAt: -1 };
+          break;
+        default:
+          // Default: featured first, then by creation date
+          sortCriteria = { featured: -1, createdAt: -1 };
+      }
+
+      // Pagination
+      const page = query.page || 1;
+      const limit = query.limit || 12;
+      const skip = (page - 1) * limit;
+
+      console.log(`📄 Pagination: page ${page}, limit ${limit}, skip ${skip}`);
+
+      // Execute query with pagination
+      const [properties, totalCount] = await Promise.all([
+        PropertyModel.find(mongoQuery)
+          .sort(sortCriteria)
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        PropertyModel.countDocuments(mongoQuery),
+      ]);
+
+      console.log(
+        `✅ Found ${properties.length} properties in database (total: ${totalCount})`
+      );
+
+      // Transform database properties to API format
+      const transformedProperties = properties.map(
+        this.transformDatabasePropertyToListItem
+      );
+
+      return {
+        success: true,
+        data: transformedProperties,
+        message: `Successfully fetched ${transformedProperties.length} properties from database`,
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+        },
+      };
+    } catch (error) {
+      console.error("❌ Error fetching properties from database:", error);
+      throw new Error("Failed to fetch properties from database");
+    }
+  }
+
+  // Get all properties with optional filtering and sorting (LEGACY: API-first approach)
   async getAllProperties(
     query: GetPropertiesQuery = {}
   ): Promise<ApiResponse<Property[]>> {

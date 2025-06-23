@@ -96,7 +96,8 @@ export interface GetPropertiesQuery {
     | "price_asc"
     | "price_desc"
     | "name_asc"
-    | "name_desc";
+    | "name_desc"
+    | "featured";
   area?: string;
   developer?: string;
   status?: string;

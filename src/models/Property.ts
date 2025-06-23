@@ -134,8 +134,8 @@ const PropertySchema: Schema = new Schema(
     },
     featured: {
       type: Boolean,
-      default: false,
-      index: false, // Index for efficient querying of featured properties
+      default: false, // Default to false - users must manually feature properties
+      index: true, // Index for efficient querying of featured properties
     },
     pendingReview: {
       type: Boolean,

@@ -14,7 +14,9 @@ import propertyRoutes from "./routes/properties";
 import healthRoutes from "./routes/health";
 import testRoutes from "./routes/test";
 import listingsRoutes from "./routes/listings";
+import syncRoutes from "./routes/sync";
 import database from "./database/connection";
+import propertySyncService from "./services/propertySyncService";
 
 const app = express();
 
@@ -52,6 +54,7 @@ if (config.nodeEnv === "development") {
 app.use("/api/health", healthRoutes);
 app.use("/api/properties", propertyRoutes);
 app.use("/api/listings", listingsRoutes);
+app.use("/api/sync", syncRoutes);
 app.use("/api/test", testRoutes);
 
 // Root endpoint
@@ -65,6 +68,7 @@ app.get("/", (req, res) => {
       health: "/api/health",
       properties: "/api/properties",
       listings: "/api/listings",
+      sync: "/api/sync",
       test: "/api/test",
     },
   });
@@ -77,6 +81,19 @@ app.use(errorHandler);
 // Initialize database connection
 database.connect();
 
+// Initialize Property Sync Service
+const initializeServices = async () => {
+  try {
+    // Wait a bit for database to be ready
+    setTimeout(() => {
+      console.log("🔄 Initializing Property Sync Service...");
+      propertySyncService.start();
+    }, 5000); // 5 second delay to ensure database is connected
+  } catch (error) {
+    console.error("❌ Failed to initialize Property Sync Service:", error);
+  }
+};
+
 // Start server
 const server = app.listen(config.port, () => {
   console.log(`
@@ -86,13 +103,19 @@ const server = app.listen(config.port, () => {
 🔗 Frontend: ${config.frontendUrl}
 📊 Health Check: http://localhost:${config.port}/api/health
 🏠 Properties API: http://localhost:${config.port}/api/properties
+🔄 Sync API: http://localhost:${config.port}/api/sync
   `);
+
+  // Initialize services after server starts
+  initializeServices();
 });
 
 // Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("👋 SIGTERM received, shutting down gracefully");
   server.close(async () => {
+    console.log("🛑 Stopping Property Sync Service...");
+    propertySyncService.stop();
     await database.disconnect();
     console.log("💤 Process terminated");
   });
@@ -101,6 +124,8 @@ process.on("SIGTERM", () => {
 process.on("SIGINT", () => {
   console.log("👋 SIGINT received, shutting down gracefully");
   server.close(async () => {
+    console.log("🛑 Stopping Property Sync Service...");
+    propertySyncService.stop();
     await database.disconnect();
     console.log("💤 Process terminated");
   });

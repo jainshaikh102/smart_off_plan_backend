@@ -9,8 +9,14 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "jest",
+    "test:sync": "jest src/tests/propertySyncService.test.ts",
     "lint": "eslint src/**/*.ts",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "sync:status": "curl -s http://localhost:5000/api/sync/status | jq",
+    "sync:trigger": "curl -s -X POST http://localhost:5000/api/sync/trigger | jq",
+    "sync:start": "curl -s -X POST http://localhost:5000/api/sync/start | jq",
+    "sync:stop": "curl -s -X POST http://localhost:5000/api/sync/stop | jq",
+    "sync:cleanup": "curl -s -X POST http://localhost:5000/api/sync/cleanup | jq"
   },
   "keywords": [
     "real-estate",

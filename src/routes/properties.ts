@@ -11,11 +11,18 @@ import {
 const router = Router();
 const propertyController = new PropertyController();
 
-// GET /api/properties - Get all properties with optional filtering and pagination
+// GET /api/properties - Get all properties from database (NEW: Database-first approach)
 router.get(
   "/",
   validateQuery(getPropertiesQuerySchema),
   propertyController.getAllProperties
+);
+
+// GET /api/properties/legacy - Get all properties from API (LEGACY: API-first approach)
+router.get(
+  "/legacy",
+  validateQuery(getPropertiesQuerySchema),
+  propertyController.getAllPropertiesLegacy
 );
 
 // GET /api/properties/search - Search properties
