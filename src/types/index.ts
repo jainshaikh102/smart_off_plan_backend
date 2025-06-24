@@ -19,6 +19,37 @@ export interface Property {
   updated_at?: string;
 }
 
+export interface FullProperty {
+  _id?: string;
+  externalId: number;
+  name: string;
+  area: string;
+  area_unit: string;
+  cover_image_url: string;
+  developer: string;
+  is_partner_project: boolean;
+  min_price: number;
+  max_price: number;
+  price_currency: string;
+  sale_status: string;
+  status: string;
+  completion_datetime: string;
+  coordinates: string;
+  description: string;
+  completePropertyData: any; // Or define a specific type for completePropertyData
+  featured: boolean;
+  pendingReview: boolean;
+  featureReason: string[];
+  reelly_status: boolean;
+  lastFeaturedAt?: string;
+  lastFetchedAt: Date;
+  cacheExpiresAt: Date;
+  source: string;
+  createdAt: Date;
+  updatedAt: Date;
+  __v: number;
+}
+
 // API Response Types
 export interface ApiResponse<T> {
   success: boolean;

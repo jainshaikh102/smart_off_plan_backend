@@ -1,17 +1,20 @@
-import Joi from 'joi';
+import Joi from "joi";
 
 // Validation schema for property query parameters
 export const getPropertiesQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).max(1000).optional(),
   limit: Joi.number().integer().min(1).max(100).optional(),
-  sort: Joi.string().valid(
-    'completion_asc',
-    'completion_desc',
-    'price_asc',
-    'price_desc',
-    'name_asc',
-    'name_desc'
-  ).optional(),
+  sort: Joi.string()
+    .valid(
+      "completion_asc",
+      "completion_desc",
+      "price_asc",
+      "price_desc",
+      "name_asc",
+      "name_desc",
+      "featured"
+    )
+    .optional(),
   area: Joi.string().trim().max(100).optional(),
   developer: Joi.string().trim().max(100).optional(),
   status: Joi.string().trim().max(50).optional(),
@@ -39,10 +42,12 @@ export const validateQuery = (schema: Joi.ObjectSchema) => {
     });
 
     if (error) {
-      const errorMessage = error.details.map(detail => detail.message).join(', ');
+      const errorMessage = error.details
+        .map((detail) => detail.message)
+        .join(", ");
       return res.status(400).json({
         success: false,
-        error: 'Validation Error',
+        error: "Validation Error",
         message: errorMessage,
         details: error.details,
       });
@@ -62,10 +67,12 @@ export const validateParams = (schema: Joi.ObjectSchema) => {
     });
 
     if (error) {
-      const errorMessage = error.details.map(detail => detail.message).join(', ');
+      const errorMessage = error.details
+        .map((detail) => detail.message)
+        .join(", ");
       return res.status(400).json({
         success: false,
-        error: 'Validation Error',
+        error: "Validation Error",
         message: errorMessage,
         details: error.details,
       });
