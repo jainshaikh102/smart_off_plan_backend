@@ -244,14 +244,13 @@ export class PropertyService {
     ];
   }
 
-  // Get featured properties
-  async getFeaturedProperties(limit: number = 10): Promise<ApiResponse<any[]>> {
+  // Get featured properties (all featured properties without limit)
+  async getFeaturedProperties(): Promise<ApiResponse<any[]>> {
     try {
-      console.log(`🌟 Getting featured properties (limit: ${limit})`);
+      console.log(`🌟 Getting all featured properties (no limit)`);
 
       const featuredProperties = await PropertyModel.find({ featured: true })
         .sort({ createdAt: -1 })
-        .limit(limit)
         .lean();
 
       console.log(`✅ Found ${featuredProperties.length} featured properties`);
@@ -271,6 +270,115 @@ export class PropertyService {
         success: false,
         data: [],
         message: "Failed to fetch featured properties",
+      };
+    }
+  }
+
+  // Get properties sorted by completion date (ascending order - earliest completion first)
+  async getPropertiesByCompletion(): Promise<ApiResponse<any[]>> {
+    try {
+      console.log(
+        `📅 Getting properties sorted by completion date (ascending)`
+      );
+
+      const properties = await PropertyModel.find({
+        completion_datetime: { $exists: true, $ne: null },
+        reelly_status: true, // Only active properties
+      })
+        .sort({ completion_datetime: 1 }) // Ascending order (earliest first)
+        .lean();
+
+      console.log(
+        `✅ Found ${properties.length} properties with completion dates`
+      );
+
+      const transformedProperties = properties.map((property) =>
+        this.transformDatabaseProperty(property)
+      );
+
+      return {
+        success: true,
+        data: transformedProperties,
+        message: `Successfully fetched ${transformedProperties.length} properties sorted by completion date`,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching properties by completion:", error);
+      return {
+        success: false,
+        data: [],
+        message: "Failed to fetch properties by completion date",
+      };
+    }
+  }
+
+  // Get properties by developer
+  async getPropertiesByDeveloper(
+    developer: string
+  ): Promise<ApiResponse<any[]>> {
+    try {
+      console.log(`🏢 Getting properties by developer: ${developer}`);
+
+      // Case-insensitive search for developer
+      const properties = await PropertyModel.find({
+        developer: { $regex: new RegExp(developer, "i") },
+        reelly_status: true, // Only active properties
+      })
+        .sort({ name: 1 }) // Sort by property name
+        .lean();
+
+      console.log(
+        `✅ Found ${properties.length} properties by developer: ${developer}`
+      );
+
+      const transformedProperties = properties.map((property) =>
+        this.transformDatabaseProperty(property)
+      );
+
+      return {
+        success: true,
+        data: transformedProperties,
+        message: `Successfully fetched ${transformedProperties.length} properties by developer: ${developer}`,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching properties by developer:", error);
+      return {
+        success: false,
+        data: [],
+        message: "Failed to fetch properties by developer",
+      };
+    }
+  }
+
+  // Get properties by area
+  async getPropertiesByArea(area: string): Promise<ApiResponse<any[]>> {
+    try {
+      console.log(`🏙️ Getting properties by area: ${area}`);
+
+      // Case-insensitive search for area
+      const properties = await PropertyModel.find({
+        area: { $regex: new RegExp(area, "i") },
+        reelly_status: true, // Only active properties
+      })
+        .sort({ name: 1 }) // Sort by property name
+        .lean();
+
+      console.log(`✅ Found ${properties.length} properties in area: ${area}`);
+
+      const transformedProperties = properties.map((property) =>
+        this.transformDatabaseProperty(property)
+      );
+
+      return {
+        success: true,
+        data: transformedProperties,
+        message: `Successfully fetched ${transformedProperties.length} properties in area: ${area}`,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching properties by area:", error);
+      return {
+        success: false,
+        data: [],
+        message: "Failed to fetch properties by area",
       };
     }
   }

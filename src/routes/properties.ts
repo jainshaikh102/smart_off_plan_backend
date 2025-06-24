@@ -32,8 +32,20 @@ router.get(
   propertyController.searchProperties
 );
 
-// GET /api/properties/featured - Get featured properties
+// GET /api/properties/featured - Get featured properties (all featured properties without limit)
 router.get("/featured", propertyController.getFeaturedProperties);
+
+// GET /api/properties/by-completion - Get properties by completion date (ascending order)
+router.get("/by-completion", propertyController.getPropertiesByCompletion);
+
+// GET /api/properties/by-developer/:developer - Get properties by developer
+router.get(
+  "/by-developer/:developer",
+  propertyController.getPropertiesByDeveloper
+);
+
+// GET /api/properties/by-area/:area - Get properties by area
+router.get("/by-area/:area", propertyController.getPropertiesByArea);
 
 // GET /api/properties/stats - Get properties statistics
 router.get("/stats", propertyController.getPropertiesStats);

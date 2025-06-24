@@ -9,17 +9,18 @@ export class PropertyController {
     this.propertyService = new PropertyService();
   }
 
-  // Get featured properties
+  // Get featured properties (all featured properties without limit)
   getFeaturedProperties = async (
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
     try {
-      const limit = parseInt(req.query.limit as string) || 10;
-      console.log(`🌟 Featured properties API called with limit: ${limit}`);
+      console.log(
+        `🌟 Featured properties API called (no limit - all featured properties)`
+      );
 
-      const result = await this.propertyService.getFeaturedProperties(limit);
+      const result = await this.propertyService.getFeaturedProperties();
 
       if (result.success) {
         res.status(200).json(result);
@@ -28,6 +29,98 @@ export class PropertyController {
       }
     } catch (error) {
       console.error("❌ Error in getFeaturedProperties controller:", error);
+      next(error);
+    }
+  };
+
+  // Get properties by completion date (ascending order - earliest completion first)
+  getPropertiesByCompletion = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      console.log(
+        `📅 Getting properties sorted by completion date (ascending)`
+      );
+
+      const result = await this.propertyService.getPropertiesByCompletion();
+
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(404).json(result);
+      }
+    } catch (error) {
+      console.error("❌ Error in getPropertiesByCompletion controller:", error);
+      next(error);
+    }
+  };
+
+  // Get properties by developer
+  getPropertiesByDeveloper = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { developer } = req.params;
+
+      if (!developer) {
+        res.status(400).json({
+          success: false,
+          error: "Bad request",
+          message: "Developer name is required",
+        });
+        return;
+      }
+
+      console.log(`🏢 Getting properties by developer: ${developer}`);
+
+      const result = await this.propertyService.getPropertiesByDeveloper(
+        developer
+      );
+
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(404).json(result);
+      }
+    } catch (error) {
+      console.error("❌ Error in getPropertiesByDeveloper controller:", error);
+      next(error);
+    }
+  };
+
+  // Get properties by area
+  getPropertiesByArea = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { area } = req.params;
+
+      if (!area) {
+        res.status(400).json({
+          success: false,
+          error: "Bad request",
+          message: "Area name is required",
+        });
+        return;
+      }
+
+      console.log(`🏙️ Getting properties by area: ${area}`);
+
+      const result = await this.propertyService.getPropertiesByArea(area);
+
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(404).json(result);
+      }
+    } catch (error) {
+      console.error("❌ Error in getPropertiesByArea controller:", error);
       next(error);
     }
   };

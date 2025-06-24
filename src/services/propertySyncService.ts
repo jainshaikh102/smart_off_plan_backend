@@ -22,6 +22,7 @@ export interface PropertySyncStats {
   newProperties: number;
   updatedProperties: number;
   skippedDuplicates: number;
+  markedInactive: number; // NEW: Properties marked as inactive
   errors: number;
   startTime: Date;
   endTime?: Date;
@@ -299,6 +300,7 @@ export class PropertySyncService {
       newProperties: 0,
       updatedProperties: 0,
       skippedDuplicates: 0,
+      markedInactive: 0,
       errors: 0,
       startTime: new Date(),
     };
@@ -334,6 +336,13 @@ export class PropertySyncService {
         }
       }
 
+      // STEP 2: Mark properties as inactive if they no longer exist in Reelly API
+      console.log(
+        "🔍 Checking for properties that no longer exist in Reelly API..."
+      );
+      const inactiveCount = await this.markInactiveProperties(propertyIds);
+      stats.markedInactive = inactiveCount;
+
       stats.endTime = new Date();
       stats.duration = stats.endTime.getTime() - stats.startTime.getTime();
 
@@ -343,6 +352,7 @@ export class PropertySyncService {
         newProperties: stats.newProperties,
         updatedProperties: stats.updatedProperties,
         skippedDuplicates: stats.skippedDuplicates,
+        markedInactive: stats.markedInactive,
         errors: stats.errors,
       });
 
@@ -460,12 +470,30 @@ export class PropertySyncService {
       // Check if property already exists
       const existingProperty = await Property.findByExternalId(propertyId);
 
-      if (existingProperty && !existingProperty.isExpired()) {
-        stats.skippedDuplicates++;
+      if (existingProperty) {
+        // If property exists and is not expired, skip it
+        if (!existingProperty.isExpired()) {
+          stats.skippedDuplicates++;
+          console.log(
+            `⏭️ Skipping property ${propertyId} (already exists and not expired)`
+          );
+
+          // Still mark it as active in Reelly API (in case it was previously marked inactive)
+          if (!existingProperty.reelly_status) {
+            existingProperty.reelly_status = true;
+            existingProperty.lastFetchedAt = new Date();
+            await existingProperty.save();
+            console.log(
+              `✅ Reactivated property ${propertyId} (found in API again)`
+            );
+          }
+
+          return;
+        }
+
         console.log(
-          `⏭️ Skipping property ${propertyId} (already exists and not expired)`
+          `🔄 Property ${propertyId} exists but is expired, will update...`
         );
-        return;
       }
 
       // Fetch detailed property data
@@ -693,6 +721,77 @@ export class PropertySyncService {
           ", "
         )} (manual featuring required)`
       );
+    }
+  }
+
+  /**
+   * Mark properties as inactive if they no longer exist in Reelly API
+   */
+  private async markInactiveProperties(
+    activePropertyIds: number[]
+  ): Promise<number> {
+    try {
+      console.log(
+        `🔍 Checking database properties against ${activePropertyIds.length} active API properties...`
+      );
+
+      // Get all properties from database that currently have reelly_status: true
+      const dbProperties = await Property.find(
+        { reelly_status: true },
+        { externalId: 1, name: 1, _id: 1 }
+      );
+
+      console.log(
+        `📊 Found ${dbProperties.length} properties in database with reelly_status: true`
+      );
+
+      // Find properties that exist in database but not in API
+      const inactiveProperties = dbProperties.filter(
+        (dbProperty) => !activePropertyIds.includes(dbProperty.externalId)
+      );
+
+      if (inactiveProperties.length === 0) {
+        console.log(
+          "✅ All database properties are still active in Reelly API"
+        );
+        return 0;
+      }
+
+      console.log(
+        `⚠️ Found ${inactiveProperties.length} properties that no longer exist in Reelly API:`
+      );
+
+      // Mark each inactive property
+      let markedCount = 0;
+      for (const inactiveProperty of inactiveProperties) {
+        try {
+          await Property.updateOne(
+            { _id: inactiveProperty._id },
+            {
+              reelly_status: false,
+              lastFetchedAt: new Date(), // Update timestamp to track when we marked it inactive
+            }
+          );
+
+          console.log(
+            `❌ Marked property ${inactiveProperty.externalId} (${inactiveProperty.name}) as inactive`
+          );
+          markedCount++;
+        } catch (error) {
+          console.error(
+            `❌ Error marking property ${inactiveProperty.externalId} as inactive:`,
+            error
+          );
+        }
+      }
+
+      console.log(
+        `✅ Successfully marked ${markedCount} properties as inactive (reelly_status: false)`
+      );
+      return markedCount;
+    } catch (error) {
+      console.error("❌ Error in markInactiveProperties:", error);
+      return 0;
     }
   }
 
