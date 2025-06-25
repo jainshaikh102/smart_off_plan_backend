@@ -460,19 +460,24 @@ export class PropertyService {
       }
 
       // Pagination
-      const page = query.page || 1;
-      const limit = query.limit || 12;
-      const skip = (page - 1) * limit;
+      // const page = query.page || 1;
+      // const limit = query.limit || 12;
+      // const skip = (page - 1) * limit;
 
-      console.log(`📄 Pagination: page ${page}, limit ${limit}, skip ${skip}`);
+      // console.log(`📄 Pagination: page ${page}, limit ${limit}, skip ${skip}`);
 
       // Execute query with pagination
+      // const [properties, totalCount] = await Promise.all([
+      //   PropertyModel.find(mongoQuery)
+      //     .sort(sortCriteria)
+      //     .skip(skip)
+      //     .limit(limit)
+      //     .lean(),
+      //   PropertyModel.countDocuments(mongoQuery),
+      // ]);
+
       const [properties, totalCount] = await Promise.all([
-        PropertyModel.find(mongoQuery)
-          .sort(sortCriteria)
-          .skip(skip)
-          .limit(limit)
-          .lean(),
+        PropertyModel.find(mongoQuery).sort(sortCriteria).lean(), // Remove .skip() and .limit()
         PropertyModel.countDocuments(mongoQuery),
       ]);
 
@@ -490,11 +495,17 @@ export class PropertyService {
         data: transformedProperties,
         message: `Successfully fetched ${transformedProperties.length} properties from database`,
         pagination: {
-          page,
-          limit,
+          page: 1, // Default to page 1 since no pagination
+          limit: totalCount, // Set limit to total count since all data is fetched
           total: totalCount,
-          totalPages: Math.ceil(totalCount / limit),
+          totalPages: 1, // Only one page since all data is fetched
         },
+        // pagination: {
+        //   page,
+        //   limit,
+        //   total: totalCount,
+        //   totalPages: Math.ceil(totalCount / limit),
+        // },
       };
     } catch (error) {
       console.error("❌ Error fetching properties from database:", error);
