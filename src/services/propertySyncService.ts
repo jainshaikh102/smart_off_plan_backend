@@ -466,13 +466,21 @@ export class PropertySyncService {
   ): Promise<void> {
     try {
       stats.totalProcessed++;
+      console.log(`🔍 Processing property ${propertyId}...`);
 
       // Check if property already exists
+      console.log(
+        `📋 Checking if property ${propertyId} exists in database...`
+      );
       const existingProperty = await Property.findByExternalId(propertyId);
+      console.log(`📋 Property ${propertyId} exists: ${!!existingProperty}`);
 
       if (existingProperty) {
         // If property exists and is not expired, skip it
-        if (!existingProperty.isExpired()) {
+        const isExpired = existingProperty.isExpired();
+        console.log(`📋 Property ${propertyId} is expired: ${isExpired}`);
+
+        if (!isExpired) {
           stats.skippedDuplicates++;
           console.log(
             `⏭️ Skipping property ${propertyId} (already exists and not expired)`
@@ -505,18 +513,27 @@ export class PropertySyncService {
         return;
       }
 
+      console.log(`📊 Property ${propertyId} data fetched successfully`);
+
       // Save or update property
       if (existingProperty) {
+        console.log(`🔄 Updating existing property ${propertyId}...`);
         await this.updateProperty(existingProperty, propertyData);
         stats.updatedProperties++;
-        console.log(`🔄 Updated property ${propertyId}`);
+        console.log(`✅ Updated property ${propertyId}`);
       } else {
+        console.log(`✨ Creating new property ${propertyId}...`);
         await this.createProperty(propertyData);
         stats.newProperties++;
-        console.log(`✨ Created new property ${propertyId}`);
+        console.log(`✅ Created new property ${propertyId}`);
       }
     } catch (error) {
       console.error(`❌ Error processing property ${propertyId}:`, error);
+      console.error(`❌ Error details:`, {
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+        propertyId,
+      });
       throw error;
     }
   }
@@ -560,6 +577,14 @@ export class PropertySyncService {
    */
   private async createProperty(propertyData: any): Promise<IProperty> {
     try {
+      console.log(`💾 Creating property ${propertyData.id} with data:`, {
+        id: propertyData.id,
+        name: propertyData.name,
+        area: propertyData.area,
+        developer: propertyData.developer,
+        hasCompleteData: !!propertyData,
+      });
+
       const property = new Property({
         externalId: propertyData.id,
         name: propertyData.name || "Unknown Property",
@@ -592,15 +617,26 @@ export class PropertySyncService {
         source: "realty_api",
       });
 
+      console.log(`💾 Property object created, attempting to save...`);
+
       // Analyze featuring potential (but don't auto-feature)
       this.analyzeFeaturingPotential(property, propertyData);
 
       const savedProperty = await property.save();
-      console.log(`💾 Saved property ${propertyData.id} to database`);
+      console.log(
+        `✅ Successfully saved property ${propertyData.id} to database`
+      );
 
       return savedProperty;
     } catch (error) {
       console.error(`❌ Error creating property ${propertyData.id}:`, error);
+      console.error(`❌ Property data that failed:`, {
+        id: propertyData?.id,
+        name: propertyData?.name,
+        area: propertyData?.area,
+        developer: propertyData?.developer,
+        dataKeys: propertyData ? Object.keys(propertyData) : "No data",
+      });
       throw error;
     }
   }

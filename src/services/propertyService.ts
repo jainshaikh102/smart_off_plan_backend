@@ -245,7 +245,7 @@ export class PropertyService {
   }
 
   // Get featured properties (all featured properties without limit)
-  async getFeaturedProperties(): Promise<ApiResponse<any[]>> {
+  async getFeaturedProperties(): Promise<ApiResponse<Property[]>> {
     try {
       console.log(`🌟 Getting all featured properties (no limit)`);
 
@@ -275,7 +275,7 @@ export class PropertyService {
   }
 
   // Get properties sorted by completion date (ascending order - earliest completion first)
-  async getPropertiesByCompletion(): Promise<ApiResponse<any[]>> {
+  async getPropertiesByCompletion(): Promise<ApiResponse<Property[]>> {
     try {
       console.log(
         `📅 Getting properties sorted by completion date (ascending)`
@@ -314,7 +314,7 @@ export class PropertyService {
   // Get properties by developer
   async getPropertiesByDeveloper(
     developer: string
-  ): Promise<ApiResponse<any[]>> {
+  ): Promise<ApiResponse<Property[]>> {
     try {
       console.log(`🏢 Getting properties by developer: ${developer}`);
 
@@ -350,7 +350,7 @@ export class PropertyService {
   }
 
   // Get properties by area
-  async getPropertiesByArea(area: string): Promise<ApiResponse<any[]>> {
+  async getPropertiesByArea(area: string): Promise<ApiResponse<Property[]>> {
     try {
       console.log(`🏙️ Getting properties by area: ${area}`);
 
