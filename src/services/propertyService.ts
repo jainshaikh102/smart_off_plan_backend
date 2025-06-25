@@ -3,6 +3,7 @@ import config from "../config";
 import {
   Property,
   ApiResponse,
+  ErrorResponse,
   GetPropertiesQuery,
   PropertyDetailsResponse,
 } from "../types";
@@ -36,10 +37,21 @@ export class PropertyService {
       max_price: apiProperty.max_price,
       price_currency: apiProperty.price_currency,
       sale_status: apiProperty.sale_status,
-      status: apiProperty.status,
+      status: "active", // Property status (active/disabled/draft)
+      development_status: apiProperty.status || "Unknown", // Development status from API
       completion_datetime: apiProperty.completion_datetime,
       coordinates: apiProperty.coordinates,
-      normalized_type: apiProperty.normalized_type,
+      description: apiProperty.description || "",
+      featured: false,
+      pendingReview: false,
+      featureReason: [],
+      reelly_status: true,
+      lastFetchedAt: new Date(),
+      cacheExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      source: "realty_api",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      __v: 0,
     };
   }
 
@@ -51,18 +63,33 @@ export class PropertyService {
       id: cachedProperty.externalId,
       name: cachedProperty.name,
       area: cachedProperty.area,
-      area_unit: cachedProperty.area_unit,
-      cover_image_url: cachedProperty.cover_image_url,
+      area_unit: cachedProperty.area_unit || "",
+      cover_image_url: cachedProperty.cover_image_url || "",
       developer: cachedProperty.developer,
       is_partner_project: cachedProperty.is_partner_project,
-      min_price: cachedProperty.min_price,
-      max_price: cachedProperty.max_price,
+      min_price: cachedProperty.min_price || 0,
+      max_price: cachedProperty.max_price || 0,
       price_currency: cachedProperty.price_currency,
       sale_status: cachedProperty.sale_status,
       status: cachedProperty.status,
-      completion_datetime: cachedProperty.completion_datetime,
-      coordinates: cachedProperty.coordinates,
-      // Remove normalized_type as it's not in new schema
+      development_status:
+        (cachedProperty as any).completePropertyData?.status || "Unknown",
+      completion_datetime: cachedProperty.completion_datetime || "",
+      coordinates: cachedProperty.coordinates || "",
+      description: cachedProperty.description || "",
+      featured: cachedProperty.featured || false,
+      pendingReview: cachedProperty.pendingReview || false,
+      featureReason: cachedProperty.featureReason || [],
+      reelly_status: cachedProperty.reelly_status || true,
+      lastFeaturedAt: cachedProperty.lastFeaturedAt
+        ? cachedProperty.lastFeaturedAt.toISOString()
+        : undefined,
+      lastFetchedAt: cachedProperty.lastFetchedAt || new Date(),
+      cacheExpiresAt: cachedProperty.cacheExpiresAt || new Date(),
+      source: cachedProperty.source || "database",
+      createdAt: cachedProperty.createdAt || new Date(),
+      updatedAt: cachedProperty.updatedAt || new Date(),
+      __v: (cachedProperty as any).__v || 0,
     };
   }
 
@@ -127,14 +154,29 @@ export class PropertyService {
       price_currency: dbProperty.price_currency,
       sale_status: dbProperty.sale_status,
       status: dbProperty.status,
+      development_status: dbProperty.completePropertyData?.status || "Unknown",
       completion_datetime: dbProperty.completion_datetime,
       coordinates: dbProperty.coordinates,
-      normalized_type: dbProperty.normalized_type || "Property",
+      description: dbProperty.description,
+      featured: dbProperty.featured,
+      pendingReview: dbProperty.pendingReview,
+      featureReason: dbProperty.featureReason,
+      reelly_status: dbProperty.reelly_status,
+      lastFeaturedAt: dbProperty.lastFeaturedAt,
+      lastFetchedAt: dbProperty.lastFetchedAt,
+      cacheExpiresAt: dbProperty.cacheExpiresAt,
+      source: dbProperty.source,
+      createdAt: dbProperty.createdAt,
+      updatedAt: dbProperty.updatedAt,
+      __v: dbProperty.__v,
     };
   }
 
   // Mock data that matches your frontend's expected structure
   private getMockProperties(): Property[] {
+    const now = new Date();
+    const cacheExpiry = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
+
     return [
       {
         id: 1,
@@ -152,10 +194,22 @@ export class PropertyService {
         max_price: 2500000,
         price_currency: "AED",
         sale_status: "Available",
-        status: "Off-plan",
+        status: "active",
+        development_status: "Off-plan",
         completion_datetime: "2025-06-15T00:00:00Z",
         coordinates: "25.0771, 55.1408",
-        normalized_type: "Apartment",
+        description: "Luxury waterfront apartments with stunning marina views",
+        featured: true,
+        pendingReview: false,
+        featureReason: ["prime_location", "luxury_amenities"],
+        reelly_status: true,
+        lastFeaturedAt: now.toISOString(),
+        lastFetchedAt: now,
+        cacheExpiresAt: cacheExpiry,
+        source: "realty_api",
+        createdAt: now,
+        updatedAt: now,
+        __v: 0,
       },
       {
         id: 2,
@@ -173,10 +227,22 @@ export class PropertyService {
         max_price: 4500000,
         price_currency: "AED",
         sale_status: "Available",
-        status: "Under Construction",
+        status: "active",
+        development_status: "Under Construction",
         completion_datetime: "2025-03-20T00:00:00Z",
         coordinates: "25.1972, 55.2744",
-        normalized_type: "Apartment",
+        description: "Modern apartments in the heart of Downtown Dubai",
+        featured: false,
+        pendingReview: false,
+        featureReason: [],
+        reelly_status: true,
+        lastFeaturedAt: undefined,
+        lastFetchedAt: now,
+        cacheExpiresAt: cacheExpiry,
+        source: "realty_api",
+        createdAt: now,
+        updatedAt: now,
+        __v: 0,
       },
       {
         id: 3,
@@ -194,10 +260,22 @@ export class PropertyService {
         max_price: 1800000,
         price_currency: "AED",
         sale_status: "Available",
-        status: "Off-plan",
+        status: "active",
+        development_status: "Off-plan",
         completion_datetime: "2025-09-10T00:00:00Z",
         coordinates: "25.1881, 55.2604",
-        normalized_type: "Studio",
+        description: "Modern tower in the business district",
+        featured: true,
+        pendingReview: false,
+        featureReason: ["business_location"],
+        reelly_status: true,
+        lastFeaturedAt: now.toISOString(),
+        lastFetchedAt: now,
+        cacheExpiresAt: cacheExpiry,
+        source: "realty_api",
+        createdAt: now,
+        updatedAt: now,
+        __v: 0,
       },
       {
         id: 4,
@@ -215,10 +293,22 @@ export class PropertyService {
         max_price: 15000000,
         price_currency: "AED",
         sale_status: "Available",
-        status: "Ready",
+        status: "active",
+        development_status: "Ready",
         completion_datetime: "2024-12-31T00:00:00Z",
         coordinates: "25.1124, 55.139",
-        normalized_type: "Villa",
+        description: "Luxury villa with private beach access",
+        featured: false,
+        pendingReview: false,
+        featureReason: [],
+        reelly_status: true,
+        lastFeaturedAt: undefined,
+        lastFetchedAt: now,
+        cacheExpiresAt: cacheExpiry,
+        source: "realty_api",
+        createdAt: now,
+        updatedAt: now,
+        __v: 0,
       },
       {
         id: 5,
@@ -236,10 +326,22 @@ export class PropertyService {
         max_price: 3200000,
         price_currency: "AED",
         sale_status: "Available",
-        status: "Under Construction",
+        status: "active",
+        development_status: "Under Construction",
         completion_datetime: "2025-01-15T00:00:00Z",
         coordinates: "25.0869, 55.1442",
-        normalized_type: "Apartment",
+        description: "Beachfront apartments with stunning views",
+        featured: false,
+        pendingReview: false,
+        featureReason: [],
+        reelly_status: true,
+        lastFeaturedAt: undefined,
+        lastFetchedAt: now,
+        cacheExpiresAt: cacheExpiry,
+        source: "realty_api",
+        createdAt: now,
+        updatedAt: now,
+        __v: 0,
       },
     ];
   }
@@ -1096,6 +1198,68 @@ export class PropertyService {
     } catch (error) {
       console.error("External API error:", error);
       throw new Error("Failed to fetch from external API");
+    }
+  }
+
+  // Get project/development statuses from Realty API
+  async getProjectStatuses(): Promise<ApiResponse<any[]> | ErrorResponse> {
+    try {
+      console.log("📊 Fetching project statuses from Realty API");
+
+      const response = await axios.get(`${this.baseUrl}/v1/project-statuses`, {
+        headers: {
+          "X-API-Key": this.apiKey,
+          "Content-Type": "application/json",
+          accept: "application/json",
+        },
+        timeout: 10000, // 10 seconds timeout
+      });
+
+      console.log("✅ Successfully fetched project statuses:", response.data);
+
+      return {
+        success: true,
+        data: response.data,
+        message: `Found ${response.data?.length || 0} project statuses`,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching project statuses:", error);
+      return {
+        success: false,
+        error: "Failed to fetch project statuses",
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  // Get sale statuses from Realty API
+  async getSaleStatuses(): Promise<ApiResponse<any[]> | ErrorResponse> {
+    try {
+      console.log("🛒 Fetching sale statuses from Realty API");
+
+      const response = await axios.get(`${this.baseUrl}/v1/sale-statuses`, {
+        headers: {
+          "X-API-Key": this.apiKey,
+          "Content-Type": "application/json",
+          accept: "application/json",
+        },
+        timeout: 10000, // 10 seconds timeout
+      });
+
+      console.log("✅ Successfully fetched sale statuses:", response.data);
+
+      return {
+        success: true,
+        data: response.data,
+        message: `Found ${response.data?.length || 0} sale statuses`,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching sale statuses:", error);
+      return {
+        success: false,
+        error: "Failed to fetch sale statuses",
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
     }
   }
 }

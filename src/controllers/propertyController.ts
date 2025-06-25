@@ -402,4 +402,48 @@ export class PropertyController {
       next(error);
     }
   };
+
+  // Get project/development statuses from Realty API
+  getProjectStatuses = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      console.log("📊 Getting project statuses from Realty API");
+
+      const result = await this.propertyService.getProjectStatuses();
+
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(500).json(result);
+      }
+    } catch (error) {
+      console.error("❌ Error in getProjectStatuses controller:", error);
+      next(error);
+    }
+  };
+
+  // Get sale statuses from Realty API
+  getSaleStatuses = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      console.log("🛒 Getting sale statuses from Realty API");
+
+      const result = await this.propertyService.getSaleStatuses();
+
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(500).json(result);
+      }
+    } catch (error) {
+      console.error("❌ Error in getSaleStatuses controller:", error);
+      next(error);
+    }
+  };
 }

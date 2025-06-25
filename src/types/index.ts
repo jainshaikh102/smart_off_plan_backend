@@ -3,20 +3,30 @@ export interface Property {
   id: number;
   name: string;
   area: string;
-  area_unit?: string;
-  cover_image_url: string | null;
+  area_unit: string;
+  cover_image_url: string;
   developer: string;
   is_partner_project: boolean;
-  min_price: number | null;
-  max_price: number | null;
+  min_price: number;
+  max_price: number;
   price_currency: string;
   sale_status: string;
   status: string;
-  completion_datetime: string | null;
-  coordinates?: string;
-  normalized_type?: string;
-  created_at?: string;
-  updated_at?: string;
+  development_status: string; // Development status from complete property data
+  completion_datetime: string;
+  coordinates: string;
+  description: string;
+  featured: boolean;
+  pendingReview: boolean;
+  featureReason: string[];
+  reelly_status: boolean;
+  lastFeaturedAt?: string;
+  lastFetchedAt: Date;
+  cacheExpiresAt: Date;
+  source: string;
+  createdAt: Date;
+  updatedAt: Date;
+  __v: number;
 }
 
 export interface FullProperty {

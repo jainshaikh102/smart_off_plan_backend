@@ -50,6 +50,12 @@ router.get("/by-area/:area", propertyController.getPropertiesByArea);
 // GET /api/properties/stats - Get properties statistics
 router.get("/stats", propertyController.getPropertiesStats);
 
+// GET /api/properties/project-statuses - Get all project/development statuses from Realty API
+router.get("/project-statuses", propertyController.getProjectStatuses);
+
+// GET /api/properties/sale-statuses - Get all sale statuses from Realty API
+router.get("/sale-statuses", propertyController.getSaleStatuses);
+
 // GET /api/properties/:id - Get property by ID
 router.get(
   "/:id",
