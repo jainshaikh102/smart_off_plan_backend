@@ -33,30 +33,6 @@ export class PropertyController {
     }
   };
 
-  // Get properties by completion date (ascending order - earliest completion first)
-  getPropertiesByCompletion = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
-    try {
-      console.log(
-        `📅 Getting properties sorted by completion date (ascending)`
-      );
-
-      const result = await this.propertyService.getPropertiesByCompletion();
-
-      if (result.success) {
-        res.status(200).json(result);
-      } else {
-        res.status(404).json(result);
-      }
-    } catch (error) {
-      console.error("❌ Error in getPropertiesByCompletion controller:", error);
-      next(error);
-    }
-  };
-
   // Get properties by developer
   getPropertiesByDeveloper = async (
     req: Request,
@@ -443,6 +419,51 @@ export class PropertyController {
       }
     } catch (error) {
       console.error("❌ Error in getSaleStatuses controller:", error);
+      next(error);
+    }
+  };
+
+  // Get areas with property counts from Realty API
+  getAreas = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      console.log("🏙️ Getting areas (fast - no property counts)");
+
+      const result = await this.propertyService.getAreas();
+
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(500).json(result);
+      }
+    } catch (error) {
+      console.error("❌ Error in getAreas controller:", error);
+      next(error);
+    }
+  };
+
+  // Get property count for a specific area
+  getAreaPropertyCount = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { areaName } = req.params;
+      console.log(`🔢 Getting property count for area: ${areaName}`);
+
+      const result = await this.propertyService.getAreaPropertyCount(areaName);
+
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(500).json(result);
+      }
+    } catch (error) {
+      console.error("❌ Error in getAreaPropertyCount controller:", error);
       next(error);
     }
   };

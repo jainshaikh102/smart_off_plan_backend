@@ -236,21 +236,33 @@ PropertySchema.statics.findExpired = function () {
 };
 
 PropertySchema.statics.findByArea = function (area: string) {
-  return this.find({ area: new RegExp(area, "i"), status: "active" });
+  return this.find({
+    area: new RegExp(area, "i"),
+    status: "active",
+    reelly_status: true,
+  });
 };
 
 PropertySchema.statics.findByDeveloper = function (developer: string) {
-  return this.find({ developer: new RegExp(developer, "i"), status: "active" });
+  return this.find({
+    developer: new RegExp(developer, "i"),
+    status: "active",
+    reelly_status: true,
+  });
 };
 
 PropertySchema.statics.findFeatured = function (limit: number = 10) {
-  return this.find({ featured: true, status: "active" })
+  return this.find({ featured: true, status: "active", reelly_status: true })
     .sort({ lastFeaturedAt: -1 })
     .limit(limit);
 };
 
 PropertySchema.statics.findPendingReview = function () {
-  return this.find({ pendingReview: true, status: "active" }).sort({
+  return this.find({
+    pendingReview: true,
+    status: "active",
+    reelly_status: true,
+  }).sort({
     updatedAt: -1,
   });
 };

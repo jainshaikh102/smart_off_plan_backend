@@ -351,7 +351,11 @@ export class PropertyService {
     try {
       console.log(`🌟 Getting all featured properties (no limit)`);
 
-      const featuredProperties = await PropertyModel.find({ featured: true })
+      const featuredProperties = await PropertyModel.find({
+        featured: true,
+        status: "active", // Only get active properties (consistent with main listing)
+        reelly_status: true, // Only get properties that exist in Reelly API
+      })
         .sort({ createdAt: -1 })
         .lean();
 
@@ -376,43 +380,6 @@ export class PropertyService {
     }
   }
 
-  // Get properties sorted by completion date (ascending order - earliest completion first)
-  async getPropertiesByCompletion(): Promise<ApiResponse<Property[]>> {
-    try {
-      console.log(
-        `📅 Getting properties sorted by completion date (ascending)`
-      );
-
-      const properties = await PropertyModel.find({
-        completion_datetime: { $exists: true, $ne: null },
-        reelly_status: true, // Only active properties
-      })
-        .sort({ completion_datetime: 1 }) // Ascending order (earliest first)
-        .lean();
-
-      console.log(
-        `✅ Found ${properties.length} properties with completion dates`
-      );
-
-      const transformedProperties = properties.map((property) =>
-        this.transformDatabaseProperty(property)
-      );
-
-      return {
-        success: true,
-        data: transformedProperties,
-        message: `Successfully fetched ${transformedProperties.length} properties sorted by completion date`,
-      };
-    } catch (error) {
-      console.error("❌ Error fetching properties by completion:", error);
-      return {
-        success: false,
-        data: [],
-        message: "Failed to fetch properties by completion date",
-      };
-    }
-  }
-
   // Get properties by developer
   async getPropertiesByDeveloper(
     developer: string
@@ -420,10 +387,13 @@ export class PropertyService {
     try {
       console.log(`🏢 Getting properties by developer: ${developer}`);
 
-      // Case-insensitive search for developer
+      // Case-insensitive search for developer with consistent filtering
+      // Escape special regex characters in developer name
+      const escapedDeveloper = developer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const properties = await PropertyModel.find({
-        developer: { $regex: new RegExp(developer, "i") },
-        reelly_status: true, // Only active properties
+        developer: { $regex: new RegExp(escapedDeveloper, "i") },
+        status: "active", // Only get active properties (consistent with main listing)
+        reelly_status: true, // Only get properties that exist in Reelly API
       })
         .sort({ name: 1 }) // Sort by property name
         .lean();
@@ -456,10 +426,13 @@ export class PropertyService {
     try {
       console.log(`🏙️ Getting properties by area: ${area}`);
 
-      // Case-insensitive search for area
+      // Case-insensitive search for area with consistent filtering
+      // Escape special regex characters in area name
+      const escapedArea = area.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const properties = await PropertyModel.find({
-        area: { $regex: new RegExp(area, "i") },
-        reelly_status: true, // Only active properties
+        area: { $regex: new RegExp(escapedArea, "i") },
+        status: "active", // Only get active properties (consistent with main listing)
+        reelly_status: true, // Only get properties that exist in Reelly API
       })
         .sort({ name: 1 }) // Sort by property name
         .lean();
@@ -503,11 +476,18 @@ export class PropertyService {
 
       // Add filters
       if (query.area) {
-        mongoQuery.area = { $regex: query.area, $options: "i" };
+        // Escape special regex characters in area name
+        const escapedArea = query.area.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        mongoQuery.area = { $regex: escapedArea, $options: "i" };
       }
 
       if (query.developer) {
-        mongoQuery.developer = { $regex: query.developer, $options: "i" };
+        // Escape special regex characters in developer name
+        const escapedDeveloper = query.developer.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+        mongoQuery.developer = { $regex: escapedDeveloper, $options: "i" };
       }
 
       if (query.status) {
@@ -1258,6 +1238,113 @@ export class PropertyService {
       return {
         success: false,
         error: "Failed to fetch sale statuses",
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  // Get areas with property counts from Realty API and our database
+  async getAreas(): Promise<ApiResponse<any[]> | ErrorResponse> {
+    try {
+      console.log("🏙️ Fetching areas from Realty API");
+
+      // Fetch areas from Realty API
+      const response = await axios.get(`${this.baseUrl}/v1/areas`, {
+        headers: {
+          "X-API-Key": this.apiKey,
+          "Content-Type": "application/json",
+          accept: "application/json",
+        },
+        timeout: 10000, // 10 seconds timeout
+      });
+
+      console.log(
+        "✅ Successfully fetched areas from Realty API:",
+        response.data?.length || 0
+      );
+
+      // Get property counts for each area from our database
+      const areas = response.data || [];
+      const areaMap = new Map(); // Use Map to deduplicate by area name
+
+      for (const area of areas) {
+        try {
+          // Skip if area already exists (take first occurrence only)
+          if (areaMap.has(area.name)) {
+            console.log(
+              `⏭️ Skipping duplicate area "${area.name}" (ID: ${area.id})`
+            );
+            continue;
+          }
+
+          // Add area to map without property count check (frontend will filter)
+          areaMap.set(area.name, {
+            id: area.id,
+            name: area.name,
+            propertyCount: 0, // Will be calculated on frontend
+          });
+          console.log(`✅ Added area "${area.name}"`);
+        } catch (error) {
+          console.warn(`⚠️ Error processing area ${area.name}:`, error);
+        }
+      }
+
+      // Convert map to array and sort alphabetically by name
+      const allAreas = Array.from(areaMap.values()).sort((a, b) => {
+        const nameA = a.name || "";
+        const nameB = b.name || "";
+        return nameA.localeCompare(nameB);
+      });
+
+      console.log(`✅ Found ${allAreas.length} unique areas`);
+
+      return {
+        success: true,
+        data: allAreas,
+        message: `Found ${allAreas.length} unique areas`,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching areas:", error);
+      return {
+        success: false,
+        error: "Failed to fetch areas",
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  // Get property count for a specific area
+  async getAreaPropertyCount(
+    areaName: string
+  ): Promise<
+    ApiResponse<{ areaName: string; propertyCount: number }> | ErrorResponse
+  > {
+    try {
+      console.log(`🔢 Counting properties for area: ${areaName}`);
+
+      const propertyCount = await PropertyModel.countDocuments({
+        area: areaName,
+        status: "active",
+      });
+
+      console.log(`✅ Found ${propertyCount} properties in "${areaName}"`);
+
+      return {
+        success: true,
+        data: {
+          areaName,
+          propertyCount,
+        },
+        message: `Found ${propertyCount} properties in ${areaName}`,
+      };
+    } catch (error) {
+      console.error(
+        `❌ Error counting properties for area ${areaName}:`,
+        error
+      );
+      return {
+        success: false,
+        error: "Failed to count properties for area",
         message: error instanceof Error ? error.message : "Unknown error",
       };
     }

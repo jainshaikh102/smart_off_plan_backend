@@ -35,9 +35,6 @@ router.get(
 // GET /api/properties/featured - Get featured properties (all featured properties without limit)
 router.get("/featured", propertyController.getFeaturedProperties);
 
-// GET /api/properties/by-completion - Get properties by completion date (ascending order)
-router.get("/by-completion", propertyController.getPropertiesByCompletion);
-
 // GET /api/properties/by-developer/:developer - Get properties by developer
 router.get(
   "/by-developer/:developer",
@@ -55,6 +52,12 @@ router.get("/project-statuses", propertyController.getProjectStatuses);
 
 // GET /api/properties/sale-statuses - Get all sale statuses from Realty API
 router.get("/sale-statuses", propertyController.getSaleStatuses);
+
+// GET /api/properties/areas - Get all areas from Realty API (fast)
+router.get("/areas", propertyController.getAreas);
+
+// GET /api/properties/areas/:areaName/count - Get property count for specific area
+router.get("/areas/:areaName/count", propertyController.getAreaPropertyCount);
 
 // GET /api/properties/:id - Get property by ID
 router.get(
